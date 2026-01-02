@@ -21,7 +21,6 @@ public final class LuckPermsHelper {
     public static String getPrefix(ServerPlayer sp) {
         LuckPerms lp = api();
         if (lp == null) return null;
-
         User user = lp.getPlayerAdapter(ServerPlayer.class).getUser(sp);
         ContextManager cm = lp.getContextManager();
         CachedMetaData meta = user.getCachedData().getMetaData(cm.getQueryOptions(sp));
@@ -31,10 +30,16 @@ public final class LuckPermsHelper {
     public static String getSuffix(ServerPlayer sp) {
         LuckPerms lp = api();
         if (lp == null) return null;
-
         User user = lp.getPlayerAdapter(ServerPlayer.class).getUser(sp);
         ContextManager cm = lp.getContextManager();
         CachedMetaData meta = user.getCachedData().getMetaData(cm.getQueryOptions(sp));
         return meta.getSuffix();
+    }
+
+    public static String getPrimaryGroup(ServerPlayer sp) {
+        LuckPerms lp = api();
+        if (lp == null) return "default";
+        User user = lp.getPlayerAdapter(ServerPlayer.class).getUser(sp);
+        return user.getPrimaryGroup();
     }
 }

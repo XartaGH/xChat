@@ -1,6 +1,11 @@
+
 package me.xarta.xchat.config;
 
 import net.neoforged.neoforge.common.ModConfigSpec;
+import com.electronwill.nightconfig.core.UnmodifiableConfig;
+import com.electronwill.nightconfig.core.Config;
+
+import java.util.function.Predicate;
 
 public class ConfigHandler {
 
@@ -9,7 +14,10 @@ public class ConfigHandler {
     public static final ModConfigSpec.ConfigValue<String> FIRST_JOIN_FORMAT;
     public static final ModConfigSpec.ConfigValue<String> JOIN_FORMAT;
     public static final ModConfigSpec.ConfigValue<String> LEAVE_FORMAT;
-    public static final ModConfigSpec.ConfigValue<String> CHAT_FORMAT;
+    public static final ModConfigSpec.ConfigValue<UnmodifiableConfig> CHAT_FORMATS;
+    public static final ModConfigSpec.ConfigValue<Boolean> RANGE_ENABLED;
+    public static final ModConfigSpec.ConfigValue<Integer> LOCAL_RANGE;
+    public static final ModConfigSpec.ConfigValue<String> GLOBAL_SYMBOL;
 
     static {
         BUILDER.push("xChat Configuration");
@@ -27,9 +35,35 @@ public class ConfigHandler {
                 .comment("Message shown when player leaves")
                 .define("leave-message", "%prefix%%player%%suffix% &fleft the server");
 
-        CHAT_FORMAT = BUILDER
-                .comment("How the chat should look like")
-                        .define("chat-format", "%prefix%%player%%suffix%&7: &a%message%");
+        BUILDER.push("Chat formats configuration, to add new group copy a table of existing one and replace everything you need");
+        Config defaults = Config.inMemory();
+
+        Config defDefault = Config.inMemory();
+        defDefault.set("no-range", "%prefix%%player%%suffix%&7: &a%message%");
+        defDefault.set("local", "&b[L] %prefix%%player%%suffix%&7: &a%message%");
+        defDefault.set("global", "&6[G] %prefix%%player%%suffix%&7: &a%message%");
+        defaults.set("default", defDefault);
+
+        Config defGuardian = Config.inMemory();
+        defGuardian.set("no-range", "%prefix%%player%%suffix%&f: &e%message%");
+        defGuardian.set("local", "&b[L] %prefix%%player%%suffix%&f: &e%message%");
+        defGuardian.set("global", "&6[G] %prefix%%player%%suffix%&f: &e%message%");
+        defaults.set("guardian", defGuardian);
+
+        Predicate<Object> validator = o -> o instanceof UnmodifiableConfig;
+        CHAT_FORMATS = BUILDER.define("chat-format", defaults, validator);
+
+        RANGE_ENABLED = BUILDER
+                .comment("Whether the ranged mode of chat enabled")
+                .define("range-enabled", true);
+
+        LOCAL_RANGE = BUILDER
+                .comment("What is the range of local chat, if ranged mode is enabled (must be > 0 and range-enabled: true)")
+                .defineInRange("local-range", 100, 1, Integer.MAX_VALUE);
+
+        GLOBAL_SYMBOL = BUILDER
+                .comment("What symbol should be used for global chat")
+                .define("global-symbol", "!");
 
         BUILDER.pop();
         SPEC = BUILDER.build();
