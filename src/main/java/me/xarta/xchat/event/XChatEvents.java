@@ -14,9 +14,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.ServerChatEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
-
 import com.electronwill.nightconfig.core.UnmodifiableConfig;
-
 import java.util.Objects;
 
 @EventBusSubscriber(modid = XChat.MODID, value = Dist.DEDICATED_SERVER)
@@ -98,6 +96,39 @@ public class XChatEvents {
         }
     }
 
+    @SubscribeEvent
+    public static void onLogin(PlayerEvent.PlayerLoggedInEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer sp)) return;
+        MinecraftServer server = sp.server;
+        boolean firstTime = JoinedOnceData.get(server).markAndCheckFirstJoin(sp.getUUID());
+        String template = firstTime ? ConfigHandler.FIRST_JOIN_FORMAT.get() : ConfigHandler.JOIN_FORMAT.get();
+        if (!template.isBlank()) {
+            broadcastFormatted(sp.server.getPlayerList(), template, sp);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onLogout(PlayerEvent.PlayerLoggedOutEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer sp)) return;
+        String template = ConfigHandler.LEAVE_FORMAT.get();
+        if (!template.isBlank()) {
+            broadcastFormatted(sp.server.getPlayerList(), template, sp);
+        }
+    }
+
+    private static void broadcastFormatted(PlayerList pl, String template, ServerPlayer sp) {
+        String player = sp.getGameProfile().getName();
+        String prefix = LuckPermsHelper.getPrefix(sp);
+        String suffix = LuckPermsHelper.getSuffix(sp);
+        String rendered = template.replace("%player%", player);
+        rendered = (prefix != null) ? rendered.replace("%prefix%", prefix) : rendered.replace("%prefix%", "");
+        rendered = (suffix != null) ? rendered.replace("%suffix%", suffix) : rendered.replace("%suffix%", "");
+        Component msg = LegacyFormatter.parse(rendered);
+        if (!msg.getString().isEmpty()) {
+            pl.broadcastSystemMessage(msg, false);
+        }
+    }
+
     private static String stripLegacyCodes(String s) {
         if (s == null || s.isEmpty()) return s;
         String res = s.replace("&amp;", "&");
@@ -111,41 +142,5 @@ public class XChatEvents {
             out.append(c);
         }
         return out.toString();
-    }
-
-    @SubscribeEvent
-    public static void onLogin(PlayerEvent.PlayerLoggedInEvent event) {
-        if (!(event.getEntity() instanceof ServerPlayer sp)) return;
-
-        MinecraftServer server = sp.server;
-        PlayerList pl = server.getPlayerList();
-
-        boolean firstTime = JoinedOnceData.get(server).markAndCheckFirstJoin(sp.getUUID());
-        String template = firstTime ? ConfigHandler.FIRST_JOIN_FORMAT.get() : ConfigHandler.JOIN_FORMAT.get();
-
-        String player = sp.getGameProfile().getName();
-        String prefix = LuckPermsHelper.getPrefix(sp);
-        String suffix = LuckPermsHelper.getSuffix(sp);
-
-        String rendered = template.replace("%player%", player);
-        rendered = (prefix != null) ? rendered.replace("%prefix%", prefix) : rendered.replace("%prefix%", "");
-        rendered = (suffix != null) ? rendered.replace("%suffix%", suffix) : rendered.replace("%suffix%", "");
-
-        pl.broadcastSystemMessage(LegacyFormatter.parse(rendered), false);
-    }
-
-    @SubscribeEvent
-    public static void onLogout(PlayerEvent.PlayerLoggedOutEvent event) {
-        if (!(event.getEntity() instanceof ServerPlayer sp)) return;
-
-        String player = sp.getGameProfile().getName();
-        String prefix = LuckPermsHelper.getPrefix(sp);
-        String suffix = LuckPermsHelper.getSuffix(sp);
-
-        String rendered = ConfigHandler.LEAVE_FORMAT.get().replace("%player%", player);
-        rendered = (prefix != null) ? rendered.replace("%prefix%", prefix) : rendered.replace("%prefix%", "");
-        rendered = (suffix != null) ? rendered.replace("%suffix%", suffix) : rendered.replace("%suffix%", "");
-
-        sp.server.getPlayerList().broadcastSystemMessage(LegacyFormatter.parse(rendered), false);
     }
 }

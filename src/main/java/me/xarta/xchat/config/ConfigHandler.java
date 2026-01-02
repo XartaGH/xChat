@@ -26,18 +26,17 @@ public class ConfigHandler {
         BUILDER.comment("You can change chat's appearance there.");
 
         FIRST_JOIN_FORMAT = BUILDER
-                .comment("Message shown when player joins for the first time")
+                .comment("Message shown when player joins for the first time (leave empty to disable)")
                 .define("first-join-message", "%prefix%%player%%suffix% &fjoined the server for the first time!");
 
         JOIN_FORMAT = BUILDER
-                .comment("Message shown when player joins")
+                .comment("Message shown when player joins (leave empty to disable)")
                 .define("join-message", "%prefix%%player%%suffix% &fjoined the server");
 
         LEAVE_FORMAT = BUILDER
-                .comment("Message shown when player leaves")
+                .comment("Message shown when player leaves (leave empty to disable)")
                 .define("leave-message", "%prefix%%player%%suffix% &fleft the server");
 
-        BUILDER.push("Chat formats configuration, to add new group copy a table of existing one and replace everything you need");
         Config defaults = Config.inMemory();
 
         Config defDefault = Config.inMemory();
