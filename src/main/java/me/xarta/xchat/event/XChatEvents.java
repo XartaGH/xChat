@@ -1,4 +1,3 @@
-
 package me.xarta.xchat.event;
 
 import me.xarta.xchat.XChat;
@@ -30,6 +29,18 @@ public class XChatEvents {
         String raw = event.getRawText();
         String playerName = sender.getGameProfile().getName();
 
+        boolean needChatPerm = ConfigHandler.CHAT_PERMISSION_REQUIRED.get();
+        if (needChatPerm && !LuckPermsHelper.hasPermission(sender, "xchat.chat")) {
+            event.setCanceled(true);
+            Component deny = LegacyFormatter.parse(ConfigHandler.NO_CHAT_PERMISSION_MESSAGE.get());
+            sender.sendSystemMessage(deny);
+            return;
+        }
+
+        boolean needColorPerm = ConfigHandler.COLOR_PERMISSION_REQUIRED.get();
+        boolean allowColors = !needColorPerm || LuckPermsHelper.hasPermission(sender, "xchat.color");
+        String processedRaw = allowColors ? raw : stripLegacyCodes(raw);
+
         String prefix = LuckPermsHelper.getPrefix(sender);
         String suffix = LuckPermsHelper.getSuffix(sender);
 
@@ -38,8 +49,8 @@ public class XChatEvents {
         boolean localModeEnabled = rangeEnabled && localRange > 0;
 
         String sym = Objects.requireNonNullElse(ConfigHandler.GLOBAL_SYMBOL.get(), "!");
-        boolean global = localModeEnabled && !sym.isEmpty() && raw.startsWith(sym);
-        String text = global ? raw.substring(sym.length()).stripLeading() : raw;
+        boolean global = localModeEnabled && !sym.isEmpty() && processedRaw.startsWith(sym);
+        String text = global ? processedRaw.substring(sym.length()).stripLeading() : processedRaw;
 
         String mode = localModeEnabled ? (global ? "global" : "local") : "no-range";
 
@@ -85,6 +96,21 @@ public class XChatEvents {
                 }
             }
         }
+    }
+
+    private static String stripLegacyCodes(String s) {
+        if (s == null || s.isEmpty()) return s;
+        String res = s.replace("&amp;", "&");
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < res.length(); i++) {
+            char c = res.charAt(i);
+            if ((c == '&' || c == '§') && i + 1 < res.length()) {
+                i++;
+                continue;
+            }
+            out.append(c);
+        }
+        return out.toString();
     }
 
     @SubscribeEvent

@@ -42,4 +42,14 @@ public final class LuckPermsHelper {
         User user = lp.getPlayerAdapter(ServerPlayer.class).getUser(sp);
         return user.getPrimaryGroup();
     }
+
+    public static boolean hasPermission(ServerPlayer sp, String node) {
+        LuckPerms lp = api();
+        if (lp == null) return true;
+        User user = lp.getPlayerAdapter(ServerPlayer.class).getUser(sp);
+        var opts = lp.getContextManager().getQueryOptions(sp);
+        var pd = user.getCachedData().getPermissionData(opts);
+        var res = pd.checkPermission(node);
+        return res.asBoolean();
+    }
 }

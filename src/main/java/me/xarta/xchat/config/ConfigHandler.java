@@ -1,4 +1,3 @@
-
 package me.xarta.xchat.config;
 
 import net.neoforged.neoforge.common.ModConfigSpec;
@@ -18,6 +17,9 @@ public class ConfigHandler {
     public static final ModConfigSpec.ConfigValue<Boolean> RANGE_ENABLED;
     public static final ModConfigSpec.ConfigValue<Integer> LOCAL_RANGE;
     public static final ModConfigSpec.ConfigValue<String> GLOBAL_SYMBOL;
+    public static final ModConfigSpec.ConfigValue<Boolean> CHAT_PERMISSION_REQUIRED;
+    public static final ModConfigSpec.ConfigValue<Boolean> COLOR_PERMISSION_REQUIRED;
+    public static final ModConfigSpec.ConfigValue<String> NO_CHAT_PERMISSION_MESSAGE;
 
     static {
         BUILDER.push("xChat Configuration");
@@ -64,6 +66,18 @@ public class ConfigHandler {
         GLOBAL_SYMBOL = BUILDER
                 .comment("What symbol should be used for global chat")
                 .define("global-symbol", "!");
+
+        CHAT_PERMISSION_REQUIRED = BUILDER
+                .comment("Whether permission xchat.chat required to chat")
+                .define("chat-permission-required", true);
+
+        COLOR_PERMISSION_REQUIRED = BUILDER
+                .comment("Whether permission xchat.color required to use color codes (&0-&9, &a-&f, &k, &r, &n, &o, &m, &l)")
+                .define("color-permission-required", true);
+
+        NO_CHAT_PERMISSION_MESSAGE = BUILDER
+                .comment("When user don't have xchat.chat permission and chat-permission-required = true")
+                .define("no-permission-message", "&cYou don't have permission to use chat");
 
         BUILDER.pop();
         SPEC = BUILDER.build();
