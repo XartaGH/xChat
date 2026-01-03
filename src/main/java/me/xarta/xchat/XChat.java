@@ -27,5 +27,4 @@ public class XChat {
 
         LOGGER.info("xChat is on."); // Print success message
     }
-
 }

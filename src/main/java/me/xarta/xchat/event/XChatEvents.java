@@ -5,6 +5,9 @@ import me.xarta.xchat.config.ConfigHandler;
 import me.xarta.xchat.data.JoinedOnceData;
 import me.xarta.xchat.util.LegacyFormatter;
 import me.xarta.xchat.util.LuckPermsHelper;
+import me.xarta.xchat.util.MentionUtil;
+import me.xarta.xchat.util.ReplyingUtil;
+import me.xarta.xchat.util.TemplateUtil;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -15,6 +18,9 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.ServerChatEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import com.electronwill.nightconfig.core.UnmodifiableConfig;
+
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 
 @EventBusSubscriber(modid = XChat.MODID, value = Dist.DEDICATED_SERVER)
@@ -25,7 +31,6 @@ public class XChatEvents {
     public static void onServerChat(ServerChatEvent event) {
         ServerPlayer sender = event.getPlayer();
         String raw = event.getRawText();
-        String playerName = sender.getGameProfile().getName();
 
         boolean needChatPerm = ConfigHandler.CHAT_PERMISSION_REQUIRED.get();
         if (needChatPerm && !LuckPermsHelper.hasPermission(sender, "xchat.chat")) {
@@ -77,20 +82,32 @@ public class XChatEvents {
             if (template == null) template = "%prefix%%player%%suffix%&7: &a%message%";
         }
 
-        String rendered = template.replace("%player%", playerName).replace("%message%", text);
-        rendered = rendered.replace("%prefix%", Objects.requireNonNullElse(prefix, ""));
-        rendered = rendered.replace("%suffix%", Objects.requireNonNullElse(suffix, ""));
+        String nameMarker = "{#PLAYER#}";
+        String msgMarker = "{#MSG#}";
 
-        Component msg = LegacyFormatter.parse(rendered);
+        String templWithMarkers = template
+                .replace("%player%", nameMarker)
+                .replace("%message%", msgMarker)
+                .replace("%prefix%", Objects.requireNonNullElse(prefix, ""))
+                .replace("%suffix%", Objects.requireNonNullElse(suffix, ""));
+
+        Component nameComp = ReplyingUtil.makeClickableName(sender);
+        Component msgComp = MentionUtil.buildMentionsComponent(sender, text, true);
+
+        Map<String, Component> inserts = new HashMap<>();
+        inserts.put(nameMarker, nameComp);
+        inserts.put(msgMarker, msgComp);
+
+        Component finalMsg = TemplateUtil.render(templWithMarkers, inserts);
         event.setCanceled(true);
 
         if (!localModeEnabled || global) {
-            sender.server.getPlayerList().broadcastSystemMessage(msg, false);
+            sender.server.getPlayerList().broadcastSystemMessage(finalMsg, false);
         } else {
             double r2 = (double) localRange * (double) localRange;
             for (ServerPlayer p : sender.server.getPlayerList().getPlayers()) {
                 if (p.level().dimension().equals(sender.level().dimension()) && p.distanceToSqr(sender) <= r2) {
-                    p.sendSystemMessage(msg);
+                    p.sendSystemMessage(finalMsg);
                 }
             }
         }
@@ -131,16 +148,6 @@ public class XChatEvents {
 
     private static String stripLegacyCodes(String s) {
         if (s == null || s.isEmpty()) return s;
-        String res = s.replace("&amp;", "&");
-        StringBuilder out = new StringBuilder();
-        for (int i = 0; i < res.length(); i++) {
-            char c = res.charAt(i);
-            if ((c == '&' || c == '§') && i + 1 < res.length()) {
-                i++;
-                continue;
-            }
-            out.append(c);
-        }
-        return out.toString();
+        return s.replaceAll("(?i)[&§][0-9A-FK-OR]", "");
     }
 }

@@ -1,3 +1,4 @@
+
 package me.xarta.xchat.command;
 
 import com.mojang.authlib.GameProfile;
@@ -8,6 +9,8 @@ import me.xarta.xchat.config.ConfigHandler;
 import me.xarta.xchat.data.LastPmData;
 import me.xarta.xchat.util.LegacyFormatter;
 import me.xarta.xchat.util.LuckPermsHelper;
+import me.xarta.xchat.util.MentionUtil;
+import me.xarta.xchat.util.TemplateUtil;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.GameProfileArgument;
@@ -19,6 +22,8 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 @EventBusSubscriber(modid = XChat.MODID, value = Dist.DEDICATED_SERVER)
@@ -118,11 +123,35 @@ public class XChatCommands {
         boolean allowColors = !needColorPerm || LuckPermsHelper.hasPermission(sender, "xchat.color");
         String text = allowColors ? rawMsg : stripLegacyCodes(rawMsg);
 
-        String senderRendered = renderPm(ConfigHandler.PM_FORMAT_SENDER.get(), sender, target, text);
-        String receiverRendered = renderPm(ConfigHandler.PM_FORMAT_RECEIVER.get(), sender, target, text);
+        String msgMarker = "{#MSG#}";
 
-        Component sComp = LegacyFormatter.parse(senderRendered);
-        Component rComp = LegacyFormatter.parse(receiverRendered);
+        String tmplS = ConfigHandler.PM_FORMAT_SENDER.get();
+        String senderTemplate = tmplS
+                .replace("%sender-prefix%", safe(LuckPermsHelper.getPrefix(sender)))
+                .replace("%sender%", sender.getGameProfile().getName())
+                .replace("%sender-suffix%", safe(LuckPermsHelper.getSuffix(sender)))
+                .replace("%receiver-prefix%", safe(LuckPermsHelper.getPrefix(target)))
+                .replace("%receiver%", target.getGameProfile().getName())
+                .replace("%receiver-suffix%", safe(LuckPermsHelper.getSuffix(target)))
+                .replace("%message%", msgMarker);
+
+        String tmplR = ConfigHandler.PM_FORMAT_RECEIVER.get();
+        String receiverTemplate = tmplR
+                .replace("%sender-prefix%", safe(LuckPermsHelper.getPrefix(sender)))
+                .replace("%sender%", sender.getGameProfile().getName())
+                .replace("%sender-suffix%", safe(LuckPermsHelper.getSuffix(sender)))
+                .replace("%receiver-prefix%", safe(LuckPermsHelper.getPrefix(target)))
+                .replace("%receiver%", target.getGameProfile().getName())
+                .replace("%receiver-suffix%", safe(LuckPermsHelper.getSuffix(target)))
+                .replace("%message%", msgMarker);
+
+        Component msgComp = MentionUtil.buildMentionsComponent(sender, text, false);
+
+        Map<String, Component> inserts = new HashMap<>();
+        inserts.put(msgMarker, msgComp);
+
+        Component sComp = TemplateUtil.render(senderTemplate, inserts);
+        Component rComp = TemplateUtil.render(receiverTemplate, inserts);
 
         sender.sendSystemMessage(sComp);
         target.sendSystemMessage(rComp);
@@ -133,23 +162,6 @@ public class XChatCommands {
 
     private static void sendSystem(ServerPlayer player, String msgTemplate) {
         player.sendSystemMessage(LegacyFormatter.parse(msgTemplate));
-    }
-
-    private static String renderPm(String tmpl, ServerPlayer sender, ServerPlayer receiver, String message) {
-        String sp = safe(LuckPermsHelper.getPrefix(sender));
-        String ss = safe(LuckPermsHelper.getSuffix(sender));
-        String rp = safe(LuckPermsHelper.getPrefix(receiver));
-        String rs = safe(LuckPermsHelper.getSuffix(receiver));
-        String sName = sender.getGameProfile().getName();
-        String rName = receiver.getGameProfile().getName();
-        return tmpl
-                .replace("%sender-prefix%", sp)
-                .replace("%sender%", sName)
-                .replace("%sender-suffix%", ss)
-                .replace("%receiver-prefix%", rp)
-                .replace("%receiver%", rName)
-                .replace("%receiver-suffix%", rs)
-                .replace("%message%", message);
     }
 
     private static String safe(String s) {
