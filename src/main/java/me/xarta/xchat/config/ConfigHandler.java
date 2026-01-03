@@ -56,10 +56,12 @@ public class ConfigHandler {
     public static final ModConfigSpec.ConfigValue<Boolean> REPLYING_TO_TOOLTIP_ENABLED;
     public static final ModConfigSpec.ConfigValue<String> REPLYING_TO_TOOLTIP_FORMAT;
 
+    public static final ModConfigSpec.ConfigValue<String> CONSOLE_IDENTIFIER;
+
     public static final String BASE_PM = "pm";
     public static final String BASE_REPLY = "r";
 
-    private static final List<String> PM_COMMANDS_DEFAULT = List.of("msg");
+    private static final List<String> PM_COMMANDS_DEFAULT = List.of("msg", "tell", "whisper");
     private static final List<String> REPLY_COMMANDS_DEFAULT = List.of("reply");
 
     static {
@@ -222,6 +224,10 @@ public class ConfigHandler {
                 .comment("How does replying to tooltip look like (%player% is available)")
                 .define("replying-to-tooltip-format", "&3Click to &f/pm &3%player%");
 
+        CONSOLE_IDENTIFIER = BUILDER
+                .comment("How to chat with console")
+                .define("console-identifier", "#CONSOLE");
+
         BUILDER.pop();
         SPEC = BUILDER.build();
     }
@@ -239,6 +245,17 @@ public class ConfigHandler {
         set.addAll(safeGetList(REPLY_COMMANDS, REPLY_COMMANDS_DEFAULT));
         return set;
     }
+
+
+    public static String safeGetString(ModConfigSpec.ConfigValue<String> cv, String deflt) {
+        try {
+            String v = cv.get();
+            return (v.isBlank()) ? deflt : v;
+        } catch (IllegalStateException ex) {
+            return deflt;
+        }
+    }
+
 
     private static List<String> safeGetList(ModConfigSpec.ConfigValue<List<? extends String>> cv, List<String> deflt) {
         try {
