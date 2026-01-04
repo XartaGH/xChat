@@ -59,11 +59,17 @@ public class ConfigHandler {
     public static final ModConfigSpec.ConfigValue<String> CONSOLE_IDENTIFIER;
     public static final ModConfigSpec.ConfigValue<String> CONSOLE_FORMAT;
 
+    public static final ModConfigSpec.ConfigValue<List<? extends String>> BROADCAST_COMMANDS;
+    public static final ModConfigSpec.ConfigValue<Boolean> BROADCAST_PERMISSION_REQUIRED;
+    public static final ModConfigSpec.ConfigValue<String> NO_BROADCAST_PERMISSION;
+    public static final ModConfigSpec.ConfigValue<String> BROADCAST_FORMAT;
+
     public static final String BASE_PM = "pm";
     public static final String BASE_REPLY = "r";
 
     private static final List<String> PM_COMMANDS_DEFAULT = List.of("msg", "tell", "whisper");
     private static final List<String> REPLY_COMMANDS_DEFAULT = List.of("reply");
+    private static final List<String> BROADCAST_COMMANDS_DEFAULT = List.of("broadcast", "ad");
 
     static {
         BUILDER.push("xChat Configuration");
@@ -233,6 +239,22 @@ public class ConfigHandler {
                 .comment("How does console look like in PMs")
                 .define("console-format", "&cConsole");
 
+        BROADCAST_COMMANDS = BUILDER
+                .comment("What commands can be used excluding /broadcast for broadcast")
+                .define("broadcast-commands", BROADCAST_COMMANDS_DEFAULT, aliasListValidator);
+
+        BROADCAST_PERMISSION_REQUIRED = BUILDER
+                .comment("Whether permission xchat.broadcast required for /bc")
+                .define("broadcast-permission-required", true);
+
+        NO_BROADCAST_PERMISSION = BUILDER
+                .comment("Message shown when player has no permission for /bc")
+                .define("no-broadcast-permission", "&cYou don't have permission to advertise");
+
+        BROADCAST_FORMAT = BUILDER
+                .comment("How does console look like in PMs (%message%, %sender-prefix%, %sender%, %sender-suffix%)")
+                .define("broadcast-format", "&2Advertisement: &d%message% &6(&fFrom %sender-prefix%%sender%%sender-suffix%&6)");
+
         BUILDER.pop();
         SPEC = BUILDER.build();
     }
@@ -251,6 +273,12 @@ public class ConfigHandler {
         return set;
     }
 
+    public static Set<String> getAllBroadcastAliases() {
+        Set<String> set = new LinkedHashSet<>();
+        set.add("bc");
+        set.addAll(safeGetList(BROADCAST_COMMANDS, BROADCAST_COMMANDS_DEFAULT));
+        return set;
+    }
 
     public static String safeGetString(ModConfigSpec.ConfigValue<String> cv, String deflt) {
         try {
@@ -260,7 +288,6 @@ public class ConfigHandler {
             return deflt;
         }
     }
-
 
     private static List<String> safeGetList(ModConfigSpec.ConfigValue<List<? extends String>> cv, List<String> deflt) {
         try {

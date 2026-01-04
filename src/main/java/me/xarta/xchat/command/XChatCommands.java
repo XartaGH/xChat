@@ -55,6 +55,9 @@ public class XChatCommands {
         for (String alias : ConfigHandler.getAllReplyAliases()) {
             registerReply(d, alias);
         }
+        for (String alias : ConfigHandler.getAllBroadcastAliases()) {
+            registerBroadcast(d, alias);
+        }
     }
 
     private static void removeLiteral(CommandDispatcher<CommandSourceStack> d, String name) {
@@ -153,6 +156,17 @@ public class XChatCommands {
                             }
                             return processPmToPlayer(src, target, rawMsg);
                         })));
+    }
+
+    private static void registerBroadcast(CommandDispatcher<CommandSourceStack> d, String alias) {
+        LiteralArgumentBuilder<CommandSourceStack> builder = Commands.literal(alias)
+                .then(Commands.argument("message", StringArgumentType.greedyString())
+                        .executes(ctx -> {
+                            CommandSourceStack src = ctx.getSource();
+                            String raw = StringArgumentType.getString(ctx, "message");
+                            return processBroadcast(src, raw);
+                        }));
+        replaceLiteral(d, alias, builder);
     }
 
     private static int processPmToConsole(CommandSourceStack src, String rawMsg) {
@@ -308,6 +322,40 @@ public class XChatCommands {
         target.sendSystemMessage(rComp);
 
         LastPmData.get(sender.server).markReceived(target.getUUID(), sender.getUUID(), System.currentTimeMillis());
+        return 1;
+    }
+
+    private static int processBroadcast(CommandSourceStack src, String rawMsg) {
+        final boolean fromPlayer = src.getEntity() instanceof ServerPlayer;
+        final ServerPlayer sender = fromPlayer ? (ServerPlayer) src.getEntity() : null;
+
+        if (fromPlayer) {
+            if (ConfigHandler.BROADCAST_PERMISSION_REQUIRED.get() && !LuckPermsHelper.hasPermission(sender, "xchat.broadcast")) {
+                sender.sendSystemMessage(LegacyFormatter.parse(ConfigHandler.NO_BROADCAST_PERMISSION.get()));
+                return 0;
+            }
+        }
+
+        final boolean allowColors = !fromPlayer
+                || !ConfigHandler.COLOR_PERMISSION_REQUIRED.get()
+                || LuckPermsHelper.hasPermission(sender, "xchat.color");
+        final String text = allowColors ? rawMsg : stripLegacyCodes(rawMsg);
+
+        String template = ConfigHandler.BROADCAST_FORMAT.get()
+                .replace("%sender-prefix%", fromPlayer ? safe(LuckPermsHelper.getPrefix(sender)) : "")
+                .replace("%sender%", fromPlayer ? sender.getGameProfile().getName() : ConfigHandler.safeGetString(ConfigHandler.CONSOLE_FORMAT, "Console"))
+                .replace("%sender-suffix%", fromPlayer ? safe(LuckPermsHelper.getSuffix(sender)) : "")
+                .replace("%message%", "{#MSG#}");
+
+        Component msgComp = fromPlayer ? MentionUtil.buildMentionsComponent(sender, text, false) : LegacyFormatter.parse(text);
+
+        Map<String, Component> inserts = new HashMap<>();
+        inserts.put("{#MSG#}", msgComp);
+
+        Component finalMsg = TemplateUtil.render(template, inserts);
+
+        src.getServer().getPlayerList().broadcastSystemMessage(finalMsg, false);
+        src.getServer().sendSystemMessage(finalMsg);
         return 1;
     }
 
