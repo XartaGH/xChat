@@ -1,6 +1,6 @@
+
 package me.xarta.xchat.command;
 
-import com.mojang.authlib.GameProfile;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -15,7 +15,6 @@ import me.xarta.xchat.util.MentionUtil;
 import me.xarta.xchat.util.TemplateUtil;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
-import net.minecraft.commands.arguments.GameProfileArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.api.distmarker.Dist;
@@ -23,10 +22,8 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -40,16 +37,11 @@ public class XChatCommands {
     public static void onRegisterCommands(RegisterCommandsEvent event) {
         CommandDispatcher<CommandSourceStack> d = event.getDispatcher();
 
-        Set<String> pmAliases = ConfigHandler.getAllPmAliases();
-
-        String[] vanillaAliases = new String[] { "msg", "tell", "whisper", "w" };
-        for (String v : vanillaAliases) {
-            if (!pmAliases.contains(v)) {
-                disableLiteral(d, v);
-            }
+        for (String v : new String[] { "msg", "tell", "whisper", "w" }) {
+            removeLiteral(d, v);
         }
 
-        for (String alias : pmAliases) {
+        for (String alias : ConfigHandler.getAllPmAliases()) {
             registerPm(d, alias);
         }
         for (String alias : ConfigHandler.getAllReplyAliases()) {
@@ -65,11 +57,6 @@ public class XChatCommands {
         root.getChildren().removeIf(n -> n instanceof LiteralCommandNode && n.getName().equals(name));
     }
 
-    private static void disableLiteral(CommandDispatcher<CommandSourceStack> d, String name) {
-        removeLiteral(d, name);
-        d.register(Commands.literal(name).requires(src -> false));
-    }
-
     private static void replaceLiteral(CommandDispatcher<CommandSourceStack> d, String name, LiteralArgumentBuilder<CommandSourceStack> builder) {
         removeLiteral(d, name);
         d.register(builder);
@@ -79,34 +66,45 @@ public class XChatCommands {
         String consoleId = ConfigHandler.safeGetString(ConfigHandler.CONSOLE_IDENTIFIER, "#CONSOLE");
 
         LiteralArgumentBuilder<CommandSourceStack> builder = Commands.literal(alias)
+                .then(Commands.argument("target", StringArgumentType.word())
+                        .suggests((ctx, b) -> {
+                            var names = ctx.getSource().getServer().getPlayerList().getPlayerNamesArray();
+                            return net.minecraft.commands.SharedSuggestionProvider.suggest(names, b);
+                        })
+                        .then(Commands.argument("message", StringArgumentType.greedyString())
+                                .executes(ctx -> {
+                                    CommandSourceStack src = ctx.getSource();
+                                    String targetName = StringArgumentType.getString(ctx, "target");
+                                    String rawMsg = StringArgumentType.getString(ctx, "message");
+
+                                    if (targetName.equalsIgnoreCase(consoleId)) {
+                                        return processPmToConsole(src, rawMsg);
+                                    }
+
+                                    ServerPlayer target = src.getServer().getPlayerList().getPlayerByName(targetName);
+                                    if (target == null) {
+                                        Component off = LegacyFormatter.parse(ConfigHandler.TARGET_IS_OFFLINE_MESSAGE.get());
+                                        if (src.getEntity() instanceof ServerPlayer sender) {
+                                            sender.sendSystemMessage(off);
+                                        } else {
+                                            src.getServer().sendSystemMessage(off);
+                                        }
+                                        return 0;
+                                    }
+
+                                    if (src.getEntity() instanceof ServerPlayer sender && sender.getUUID().equals(target.getUUID())) {
+                                        sender.sendSystemMessage(LegacyFormatter.parse(ConfigHandler.CANT_PM_YOURSELF_MESSAGE.get()));
+                                        return 0;
+                                    }
+
+                                    return processPmToPlayer(src, target, rawMsg);
+                                })))
                 .then(Commands.literal(consoleId)
                         .then(Commands.argument("message", StringArgumentType.greedyString())
                                 .executes(ctx -> {
                                     CommandSourceStack src = ctx.getSource();
                                     String rawMsg = StringArgumentType.getString(ctx, "message");
                                     return processPmToConsole(src, rawMsg);
-                                })))
-                .then(Commands.argument("target", GameProfileArgument.gameProfile())
-                        .then(Commands.argument("message", StringArgumentType.greedyString())
-                                .executes(ctx -> {
-                                    CommandSourceStack src = ctx.getSource();
-                                    Collection<GameProfile> profiles = GameProfileArgument.getGameProfiles(ctx, "target");
-                                    if (profiles.isEmpty()) {
-                                        src.sendFailure(Component.literal("Target not found"));
-                                        return 0;
-                                    }
-                                    GameProfile gp = profiles.iterator().next();
-                                    ServerPlayer target = src.getServer().getPlayerList().getPlayerByName(gp.getName());
-                                    if (target == null) {
-                                        src.sendFailure(LegacyFormatter.parse(ConfigHandler.TARGET_IS_OFFLINE_MESSAGE.get()));
-                                        return 0;
-                                    }
-                                    if (src.getEntity() instanceof ServerPlayer sender && sender.getUUID().equals(target.getUUID())) {
-                                        sender.sendSystemMessage(LegacyFormatter.parse(ConfigHandler.CANT_PM_YOURSELF_MESSAGE.get()));
-                                        return 0;
-                                    }
-                                    String rawMsg = StringArgumentType.getString(ctx, "message");
-                                    return processPmToPlayer(src, target, rawMsg);
                                 })));
 
         replaceLiteral(d, alias, builder);
@@ -146,12 +144,12 @@ public class XChatCommands {
                             var server = src.getServer();
                             var lastSender = LastPmData.get(server).getLastSenderIfActive(CONSOLE_UUID, now, activeMillis);
                             if (lastSender == null || CONSOLE_UUID.equals(lastSender)) {
-                                src.sendFailure(LegacyFormatter.parse(ConfigHandler.NOBODY_TO_REPLY_MESSAGE.get()));
+                                server.sendSystemMessage(LegacyFormatter.parse(ConfigHandler.NOBODY_TO_REPLY_MESSAGE.get()));
                                 return 0;
                             }
                             ServerPlayer target = server.getPlayerList().getPlayer(lastSender);
                             if (target == null) {
-                                src.sendFailure(LegacyFormatter.parse(ConfigHandler.TARGET_IS_OFFLINE_MESSAGE.get()));
+                                server.sendSystemMessage(LegacyFormatter.parse(ConfigHandler.TARGET_IS_OFFLINE_MESSAGE.get()));
                                 return 0;
                             }
                             return processPmToPlayer(src, target, rawMsg);
