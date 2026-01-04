@@ -98,6 +98,10 @@ public class XChatCommands {
                                         src.sendFailure(LegacyFormatter.parse(ConfigHandler.TARGET_IS_OFFLINE_MESSAGE.get()));
                                         return 0;
                                     }
+                                    if (src.getEntity() instanceof ServerPlayer sender && sender.getUUID().equals(target.getUUID())) {
+                                        sender.sendSystemMessage(LegacyFormatter.parse(ConfigHandler.CANT_PM_YOURSELF_MESSAGE.get()));
+                                        return 0;
+                                    }
                                     String rawMsg = StringArgumentType.getString(ctx, "message");
                                     return processPmToPlayer(src, target, rawMsg);
                                 })));
@@ -110,33 +114,44 @@ public class XChatCommands {
                 .then(Commands.argument("message", StringArgumentType.greedyString())
                         .executes(ctx -> {
                             CommandSourceStack src = ctx.getSource();
-                            if (!(src.getEntity() instanceof ServerPlayer sender)) {
-                                src.sendFailure(Component.literal("Only players can use this command"));
-                                return 0;
-                            }
-                            if (ConfigHandler.REPLY_PERMISSION_REQUIRED.get() && !LuckPermsHelper.hasPermission(sender, "xchat.reply")) {
-                                sender.sendSystemMessage(LegacyFormatter.parse(ConfigHandler.NO_REPLY_PERMISSION.get()));
-                                return 0;
-                            }
-                            var server = sender.server;
+                            String rawMsg = StringArgumentType.getString(ctx, "message");
                             long now = System.currentTimeMillis();
                             long activeMillis = ConfigHandler.PM_ACTIVE_TIME.get() * 1000L;
-                            var lastSender = LastPmData.get(server).getLastSenderIfActive(sender.getUUID(), now, activeMillis);
-                            if (lastSender == null) {
-                                sender.sendSystemMessage(LegacyFormatter.parse(ConfigHandler.NOBODY_TO_REPLY_MESSAGE.get()));
-                                return 0;
+
+                            if (src.getEntity() instanceof ServerPlayer sender) {
+                                if (ConfigHandler.REPLY_PERMISSION_REQUIRED.get() && !LuckPermsHelper.hasPermission(sender, "xchat.reply")) {
+                                    sender.sendSystemMessage(LegacyFormatter.parse(ConfigHandler.NO_REPLY_PERMISSION.get()));
+                                    return 0;
+                                }
+                                var server = sender.server;
+                                var lastSender = LastPmData.get(server).getLastSenderIfActive(sender.getUUID(), now, activeMillis);
+                                if (lastSender == null) {
+                                    sender.sendSystemMessage(LegacyFormatter.parse(ConfigHandler.NOBODY_TO_REPLY_MESSAGE.get()));
+                                    return 0;
+                                }
+                                if (CONSOLE_UUID.equals(lastSender)) {
+                                    return processPmToConsole(src, rawMsg);
+                                }
+                                ServerPlayer target = server.getPlayerList().getPlayer(lastSender);
+                                if (target == null) {
+                                    sender.sendSystemMessage(LegacyFormatter.parse(ConfigHandler.TARGET_IS_OFFLINE_MESSAGE.get()));
+                                    return 0;
+                                }
+                                return processPmPlayerToPlayer(sender, target, rawMsg);
                             }
-                            if (CONSOLE_UUID.equals(lastSender)) {
-                                String rawMsg = StringArgumentType.getString(ctx, "message");
-                                return processPmToConsole(src, rawMsg);
+
+                            var server = src.getServer();
+                            var lastSender = LastPmData.get(server).getLastSenderIfActive(CONSOLE_UUID, now, activeMillis);
+                            if (lastSender == null || CONSOLE_UUID.equals(lastSender)) {
+                                src.sendFailure(LegacyFormatter.parse(ConfigHandler.NOBODY_TO_REPLY_MESSAGE.get()));
+                                return 0;
                             }
                             ServerPlayer target = server.getPlayerList().getPlayer(lastSender);
                             if (target == null) {
-                                sender.sendSystemMessage(LegacyFormatter.parse(ConfigHandler.TARGET_IS_OFFLINE_MESSAGE.get()));
+                                src.sendFailure(LegacyFormatter.parse(ConfigHandler.TARGET_IS_OFFLINE_MESSAGE.get()));
                                 return 0;
                             }
-                            String rawMsg = StringArgumentType.getString(ctx, "message");
-                            return processPmPlayerToPlayer(sender, target, rawMsg);
+                            return processPmToPlayer(src, target, rawMsg);
                         })));
     }
 
@@ -156,15 +171,17 @@ public class XChatCommands {
                 || LuckPermsHelper.hasPermission(sender, "xchat.color");
         final String text = allowColors ? rawMsg : stripLegacyCodes(rawMsg);
 
+        final String consoleName = ConfigHandler.safeGetString(ConfigHandler.CONSOLE_FORMAT, "Console");
+
         String senderTemplate = ConfigHandler.PM_FORMAT_SENDER.get()
                 .replace("%receiver-prefix%", "")
-                .replace("%receiver%", "Console")
+                .replace("%receiver%", consoleName)
                 .replace("%receiver-suffix%", "")
                 .replace("%message%", "{#MSG#}");
 
         String receiverTemplate = ConfigHandler.PM_FORMAT_RECEIVER.get()
                 .replace("%receiver-prefix%", "")
-                .replace("%receiver%", "Console")
+                .replace("%receiver%", consoleName)
                 .replace("%receiver-suffix%", "")
                 .replace("%message%", "{#MSG#}");
 
@@ -181,12 +198,12 @@ public class XChatCommands {
         } else {
             senderTemplate = senderTemplate
                     .replace("%sender-prefix%", "")
-                    .replace("%sender%", "Console")
+                    .replace("%sender%", consoleName)
                     .replace("%sender-suffix%", "");
 
             receiverTemplate = receiverTemplate
                     .replace("%sender-prefix%", "")
-                    .replace("%sender%", "Console")
+                    .replace("%sender%", consoleName)
                     .replace("%sender-suffix%", "");
         }
 
@@ -215,9 +232,11 @@ public class XChatCommands {
         if (src.getEntity() instanceof ServerPlayer sender) {
             return processPmPlayerToPlayer(sender, target, rawMsg);
         } else {
+            final String consoleName = ConfigHandler.safeGetString(ConfigHandler.CONSOLE_FORMAT, "Console");
+
             String senderTemplate = ConfigHandler.PM_FORMAT_SENDER.get()
                     .replace("%sender-prefix%", "")
-                    .replace("%sender%", "Console")
+                    .replace("%sender%", consoleName)
                     .replace("%sender-suffix%", "")
                     .replace("%receiver-prefix%", safe(LuckPermsHelper.getPrefix(target)))
                     .replace("%receiver%", target.getGameProfile().getName())
@@ -226,7 +245,7 @@ public class XChatCommands {
 
             String receiverTemplate = ConfigHandler.PM_FORMAT_RECEIVER.get()
                     .replace("%sender-prefix%", "")
-                    .replace("%sender%", "Console")
+                    .replace("%sender%", consoleName)
                     .replace("%sender-suffix%", "")
                     .replace("%receiver-prefix%", safe(LuckPermsHelper.getPrefix(target)))
                     .replace("%receiver%", target.getGameProfile().getName())
@@ -249,6 +268,11 @@ public class XChatCommands {
     }
 
     private static int processPmPlayerToPlayer(ServerPlayer sender, ServerPlayer target, String rawMsg) {
+        if (sender.getUUID().equals(target.getUUID())) {
+            sender.sendSystemMessage(LegacyFormatter.parse(ConfigHandler.CANT_PM_YOURSELF_MESSAGE.get()));
+            return 0;
+        }
+
         boolean allowColors = !ConfigHandler.COLOR_PERMISSION_REQUIRED.get() || LuckPermsHelper.hasPermission(sender, "xchat.color");
         String text = allowColors ? rawMsg : stripLegacyCodes(rawMsg);
 

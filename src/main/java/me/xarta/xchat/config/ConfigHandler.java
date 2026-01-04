@@ -57,6 +57,7 @@ public class ConfigHandler {
     public static final ModConfigSpec.ConfigValue<String> REPLYING_TO_TOOLTIP_FORMAT;
 
     public static final ModConfigSpec.ConfigValue<String> CONSOLE_IDENTIFIER;
+    public static final ModConfigSpec.ConfigValue<String> CONSOLE_FORMAT;
 
     public static final String BASE_PM = "pm";
     public static final String BASE_REPLY = "r";
@@ -227,6 +228,10 @@ public class ConfigHandler {
         CONSOLE_IDENTIFIER = BUILDER
                 .comment("How to chat with console")
                 .define("console-identifier", "#CONSOLE");
+
+        CONSOLE_FORMAT = BUILDER
+                .comment("How does console look like in PMs")
+                .define("console-format", "&cConsole");
 
         BUILDER.pop();
         SPEC = BUILDER.build();
